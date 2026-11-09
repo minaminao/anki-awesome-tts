@@ -23,7 +23,6 @@ https://apidocs.ncloud.com/en/ai-naver/clova_speech_synthesis/tts/
 
 import time
 import datetime
-import requests
 import urllib
 from .base import Service
 
@@ -96,15 +95,16 @@ class NaverClova(Service):
         speed = f"{options['speed']}"
         data = f"speaker={voice}&speed={speed}&text={encText}"
         url = "https://naveropenapi.apigw.ntruss.com/voice/v1/tts"
-        self._logger.debug(f"url: {url}, data: {data}")
-        request = urllib.request.Request(url)
-        request.add_header("X-NCP-APIGW-API-KEY-ID",client_id)
-        request.add_header("X-NCP-APIGW-API-KEY",client_secret)
-        response = urllib.request.urlopen(request, data=data.encode('utf-8'))
-        rescode = response.getcode()
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-NCP-APIGW-API-KEY-ID': client_id,
+            'X-NCP-APIGW-API-KEY': client_secret,
+        }
+        response = self.net_request('POST', url, headers=headers, data=data.encode('utf-8'))
+        rescode = response.status_code
         if(rescode==200):
             self._logger.debug("successful response")
-            response_body = response.read()
+            response_body = response.content
             with open(path, 'wb') as f:
                 f.write(response_body)
         else:

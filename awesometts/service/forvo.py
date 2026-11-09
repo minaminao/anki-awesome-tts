@@ -24,7 +24,6 @@ import json
 from .base import Service
 from .common import Trait
 import urllib
-import requests
 
 __all__ = ['Forvo']
 
@@ -746,8 +745,6 @@ class Forvo(Service):
         return result
 
     def run(self, text, options, path):
-        self._logger.debug(f'running Forvo on text=[{text}], options={options}')
-
         api_key = options['key']
         if len(api_key) == 0:
             raise IOError('API Key required for Forvo')
@@ -784,18 +781,12 @@ class Forvo(Service):
             corporate_url = True
             url = f'https://apicorporate.forvo.com/api2/v1.1/{api_key}/word-pronunciations/word/{encoded_text}/language/{encoded_language}{sex_param}/order/rate-desc/limit/1{country_code}'
 
-        self._logger.debug(f'constructed URL: {url}')
-
-        # run request
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:85.0) Gecko/20100101 Firefox/85.0'}
-        # forvo's http server / WAF / frontend setup is weird, so we have to disable SSL verification
-        response = requests.get(url, headers=headers, verify=False)
-        self._logger.debug(f'response.content: {response.content}')
+        response = self.net_request('GET', url, headers=headers)
 
         if response.status_code == 200:
             # success
             data = json.loads(response.content)
-            self._logger.debug(f'received data: {data}')
             if corporate_url:
                 items = data['data']['items']
             else:
@@ -809,18 +800,16 @@ class Forvo(Service):
                     audio_url = item['pathmp3']
                     break
 
-            response = requests.get(audio_url, verify=False)
-            response.raise_for_status()
+            audio_address = urllib.parse.urlsplit(audio_url)
+            if audio_address.scheme == 'http':
+                audio_url = audio_address._replace(scheme='https').geturl()
+            response = self.net_request('GET', audio_url, allow_redirects=True)
+            if response.status_code != 200:
+                raise IOError(f"Forvo audio request failed (HTTP {response.status_code}).")
 
             with open(path, 'wb') as audio:
                 audio.write(response.content)
 
         else:
-            data = json.loads(response.content)
-            error_text = str(data)
-            if len(data) >= 1:
-                error_text = data[0]
-            error_message = f"Status code: {response.status_code} error: {error_text} text: [{text}] voice: {options['voice']} gender: {sex}"
-            self._logger.error(error_message)
-            raise ValueError(error_message)
+            raise IOError(f"Forvo search failed (HTTP {response.status_code}).")
         

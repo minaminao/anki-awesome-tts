@@ -60,12 +60,10 @@ class Config(object):
             Makes a debug() call and then proxies the call to parent.
             """
 
-            if parameters:
-                self._logger.debug("Executing '%s' with %s", sql, parameters)
-                return sqlite3.Cursor.execute(self, sql, parameters)
-            else:
-                self._logger.debug("Executing '%s'", sql)
+            self._logger.debug("Executing '%s'", sql)
+            if parameters is None:
                 return sqlite3.Cursor.execute(self, sql)
+            return sqlite3.Cursor.execute(self, sql, parameters)
 
     __slots__ = [
         '_db',           # path to database, table name, normalize callable

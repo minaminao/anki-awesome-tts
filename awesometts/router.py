@@ -385,7 +385,7 @@ class Router(object):
         self._call_assert_callbacks(callbacks)
 
         try:
-            self._logger.debug("Call for '%s' w/ %s", svc_id, options)
+            self._logger.debug("Call for '%s'", svc_id)
 
             svc_id, service, options = self._validate_service(svc_id, options)
             if not text:
@@ -400,8 +400,7 @@ class Router(object):
             cache_hit = os.path.exists(path)
 
             self._logger.debug(
-                "Parsed call to '%s' w/ %s and \"%s\" at %s (cache %s)",
-                svc_id, options, text, path, "hit" if cache_hit else "miss",
+                "Parsed call to '%s' (cache %s)", svc_id, "hit" if cache_hit else "miss",
             )
 
             # If we didn't get a cache hit, we have to call the real service,

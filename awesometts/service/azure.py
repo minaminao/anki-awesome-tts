@@ -23,7 +23,6 @@ https://azure.microsoft.com/en-us/services/cognitive-services/text-to-speech/
 
 import time
 import datetime
-import requests
 from xml.etree import ElementTree
 from .base import Service
 from .languages import Gender
@@ -163,7 +162,9 @@ class Azure(Service):
         headers = {
             'Ocp-Apim-Subscription-Key': subscription_key
         }
-        response = requests.post(fetch_token_url, headers=headers)
+        response = self.net_request('POST', fetch_token_url, headers=headers)
+        if response.status_code != 200:
+            raise IOError(f"Azure authentication failed (HTTP {response.status_code}).")
         self.access_token = str(response.text)
         self.access_token_timestamp = datetime.datetime.now()
         self._logger.debug(f'requested access_token')
@@ -215,14 +216,12 @@ class Azure(Service):
 
         body = ssml_str.encode(encoding='utf-8')
 
-        response = requests.post(constructed_url, headers=headers, data=body)
+        response = self.net_request('POST', constructed_url, headers=headers, data=body)
         if response.status_code == 200:
             with open(path, 'wb') as audio:
                 audio.write(response.content)
         else:
-            error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}] language: [{language} " + \
-            f"subscription key: [{subscription_key}]] access token timestamp: [{self.access_token_timestamp}] access token: [{self.access_token}]"
-            raise ValueError(error_message)
+            raise IOError(f"Azure synthesis failed (HTTP {response.status_code}, voice {voice_name}, language {language}).")
 
         self._logger.debug(f'sleeping for {sleep_time} seconds')
         time.sleep(sleep_time)

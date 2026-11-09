@@ -22,7 +22,6 @@ https://fpt.ai/tts
 """
 
 from .base import Service
-import requests
 import json
 import time
 from .languages import StandardVoice
@@ -111,26 +110,16 @@ class FptAi(Service):
 
         api_url = "https://api.fpt.ai/hmi/tts/v5"
         body = text
-        response = requests.post(api_url, headers=headers, data=body.encode('utf-8'))
-
-        self._logger.debug(f'executing POST on {api_url} with headers {headers}, text: {text}')
+        response = self.net_request('POST', api_url, headers=headers, data=body.encode('utf-8'))
 
         if response.status_code != 200:
-            error_message = f"Status code: {response.status_code} voice: {options['voice']} API key: {options['key']}"
-            self._logger.error(error_message)
-            raise ValueError(error_message)
-
-        self._logger.debug(f'got response: {response.content}')
+            raise IOError(f"FPT.AI synthesis failed (HTTP {response.status_code}).")
 
         data = json.loads(response.content)
         if data['error'] != 0:
-            error_message = f"error: {data['error']} message: {data['message']}"
-            self._logger.error(error_message)
-            raise ValueError(error_message)
+            raise IOError(f"FPT.AI synthesis failed (error {data['error']}).")
 
         async_url = data['async']
-
-        self._logger.debug(f"got async url: {async_url}")
 
         # wait until the audio is available
         audio_available = False
@@ -138,7 +127,7 @@ class FptAi(Service):
         wait_time = 0.2
         while audio_available == False and max_tries > 0:
             time.sleep(wait_time)
-            r = requests.get(async_url, allow_redirects=True)
+            r = self.net_request('GET', async_url, allow_redirects=True)
             self._logger.debug(f"status code: {r.status_code}")
             if r.status_code == 200:
                 audio_available = True

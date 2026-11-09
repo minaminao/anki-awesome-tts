@@ -53,7 +53,7 @@ DEFINITE_ARTICLES = ['das', 'der', 'die', 'el', 'gli', 'i', 'il', 'l', 'la',
 
 TEXT_SPACE_LIMIT = 1
 TEXT_LENGTH_LIMIT = 75
-COLLINS_WEBSITE = 'http://www.collinsdictionary.com'
+COLLINS_WEBSITE = 'https://www.collinsdictionary.com'
 SEARCH_FORM = COLLINS_WEBSITE + '/search/'
 RE_MP3_URL = re.compile(r'<a[^>]+class="[^>"]*hwd_sound[^>"]*"[^>]+'
                         r'data-src-mp3="(/[^>"]+)"[^>]*>')

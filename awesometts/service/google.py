@@ -298,7 +298,6 @@ class Google(Service):
                 self._cookies = ';'.join(cookie.split(';')[0]
                                          for cookie
                                          in headers['Set-Cookie'].split(','))
-                self._logger.debug("Google cookies are %s", self._cookies)
 
         subtexts = self.util_split(text, 100)
 

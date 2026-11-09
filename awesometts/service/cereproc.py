@@ -7,7 +7,6 @@ https://www.cereproc.com/
 
 import time
 import datetime
-import requests
 import json
 import base64
 from .base import Service
@@ -71,7 +70,9 @@ class CereProc(Service):
         headers = {'authorization': f'Basic {auth_string}'}
 
         auth_url = 'https://api.cerevoice.com/v2/auth'
-        response = requests.get(auth_url, headers=headers)
+        response = self.net_request('GET', auth_url, headers=headers)
+        if response.status_code != 200:
+            raise IOError(f"CereProc authentication failed (HTTP {response.status_code}).")
 
         access_token = response.json()['access_token']
         return access_token
@@ -95,12 +96,10 @@ class CereProc(Service):
 
         url = f'https://api.cerevoice.com/v2/speak?voice={voice_name}&audio_format=mp3'
         # logging.debug(f'querying url: {url}')
-        response = requests.post(url, data=ssml_text, headers=self.get_auth_headers(username, password))
+        response = self.net_request('POST', url, data=ssml_text, headers=self.get_auth_headers(username, password))
 
         if response.status_code == 200:
             with open(path, 'wb') as audio:
                 audio.write(response.content)
         else:
-            self._logger.error(response.content)
-            error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}]]]"
-            raise ValueError(error_message)
+            raise IOError(f"CereProc synthesis failed (HTTP {response.status_code}).")

@@ -28,6 +28,7 @@ import os
 import shutil
 import sys
 import subprocess
+from urllib.parse import urlsplit
 import requests
 import aqt.sound
 
@@ -425,15 +426,28 @@ class Service(object, metaclass=abc.ABCMeta):
         import atexit
         atexit.register(service.terminate)
 
+    @staticmethod
+    def net_request(method, url, *, allow_redirects=False, timeout=DEFAULT_TIMEOUT, **kwargs):
+        """Send a verified HTTPS request and keep credentials out of errors."""
+        address = urlsplit(url)
+        if address.scheme != 'https' or not address.hostname or address.username is not None:
+            raise ValueError("The audio service requires a valid HTTPS URL.")
+
+        with requests.Session() as session:
+            session.adapters.pop('http://').close()
+            try:
+                return session.request(method, url, verify=True, timeout=timeout,
+                                       allow_redirects=allow_redirects, **kwargs)
+            except requests.RequestException:
+                raise IOError("HTTPS request to %s failed." % address.hostname) from None
+
     def net_headers(self, url):
         """Returns the headers for a URL."""
 
-        self._logger.debug("GET %s for headers", url)
+        self._logger.debug("GET response headers")
         self._netops += 1
-        return requests.request(
-            method='GET', url=url, headers={'User-Agent': DEFAULT_UA},
-            timeout=DEFAULT_TIMEOUT,
-        ).headers
+        return self.net_request('GET', url, headers={'User-Agent': DEFAULT_UA},
+                                allow_redirects=True).headers
 
     def parse_mime_type(self, raw_mime):
         raw_mime = raw_mime.replace('/x-', '/')
@@ -503,8 +517,7 @@ class Service(object, metaclass=abc.ABCMeta):
             desc = "web request" if len(targets) == 1 \
                 else "web request (%d of %d)" % (number, len(targets))
 
-            self._logger.debug("%s %s%s%s for %s", method, url,
-                               "?" if params else "", params or "", desc)
+            self._logger.debug("%s for %s", method, desc)
 
             headers = {'User-Agent': (self.ecosystem.agent
                                       if awesome_ua else DEFAULT_UA)}
@@ -512,29 +525,24 @@ class Service(object, metaclass=abc.ABCMeta):
                 headers.update(custom_headers)
 
             self._netops += 1
-            response = requests.request(
-                method=method,
-                url=('?'.join([url, params]) if params and method == 'GET'
-                     else url),
+            response = self.net_request(
+                method,
+                '?'.join([url, params]) if params and method == 'GET' else url,
                 headers=headers,
                 data=params.encode() if params and method == 'POST' else None,
-                timeout=DEFAULT_TIMEOUT,
+                allow_redirects=allow_redirects,
             )
+
+            if not allow_redirects and response.is_redirect:
+                response.close()
+                raise ValueError("Request has been redirected")
 
             if not response:
                 raise IOError("No response for %s" % desc)
 
             if response.status_code != 200:
-                value_error = ValueError(
-                    "Got %d status for %s" %
-                    (response.status_code, desc)
-                )
-                try:
-                    value_error.payload = response.content
-                    response.close()
-                except Exception:
-                    pass
-                raise value_error
+                response.close()
+                raise ValueError("Got %d status for %s" % (response.status_code, desc))
 
             got_mime = response.headers['Content-Type']
             simplified_mime = self.parse_mime_type(got_mime)
@@ -548,9 +556,6 @@ class Service(object, metaclass=abc.ABCMeta):
                 value_error.got_mime = got_mime
                 value_error.wanted_mime = require['mime']
                 raise value_error
-
-            if not allow_redirects and response.geturl() != url:
-                raise ValueError("Request has been redirected")
 
             payload = response.content
             response.close()

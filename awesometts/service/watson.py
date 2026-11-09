@@ -7,7 +7,6 @@ https://cloud.ibm.com/docs/text-to-speech?topic=text-to-speech-gettingStarted
 
 import time
 import datetime
-import requests
 import json
 from .base import Service
 from .languages import StandardVoice
@@ -86,7 +85,6 @@ class Watson(Service):
         base_url = api_url
         url_path = '/v1/synthesize'
         constructed_url = base_url + url_path + f'?voice={voice_name}'
-        self._logger.info(f'url: {constructed_url}')
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'audio/mp3'
@@ -96,16 +94,13 @@ class Watson(Service):
             'text': text
         }
 
-        self._logger.info(f'data: {data}')
-        response = requests.post(constructed_url, data=json.dumps(data), auth=('apikey', api_key), headers=headers)
+        response = self.net_request('POST', constructed_url, data=json.dumps(data), auth=('apikey', api_key), headers=headers)
 
         if response.status_code == 200:
             with open(path, 'wb') as audio:
                 audio.write(response.content)
         else:
-            self._logger.error(response.content)
-            error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}] api key: [{api_key}]]"
-            raise ValueError(error_message)
+            raise IOError(f"IBM Watson synthesis failed (HTTP {response.status_code}).")
 
 
 

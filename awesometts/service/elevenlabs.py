@@ -7,7 +7,6 @@ https://beta.elevenlabs.io/
 
 import time
 import datetime
-import requests
 import json
 import base64
 from .base import Service
@@ -104,8 +103,9 @@ class ElevenLabs(Service):
             }
         }
 
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
+        response = self.net_request('POST', url, json=data, headers=headers)
+        if response.status_code != 200:
+            raise IOError(f"ElevenLabs synthesis failed (HTTP {response.status_code}).")
 
         with open(path, 'wb') as audio:
             audio.write(response.content)

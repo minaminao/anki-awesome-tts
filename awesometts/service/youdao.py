@@ -86,7 +86,7 @@ class Youdao(Service):
         self.net_download(
             path,
             [
-                ('http://dict.youdao.com/dictvoice', dict(
+                ('https://dict.youdao.com/dictvoice', dict(
                     audio=subtext,
                     type=VOICE_LOOKUP[options['voice']][1],le=VOICE_LOOKUP[options['voice']][2]
                 ))

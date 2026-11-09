@@ -22,7 +22,6 @@ Service implementation for Google Cloud Text-to-Speech API
 """
 
 import base64
-import requests
 
 from hashlib import sha1
 from typing import List
@@ -167,8 +166,9 @@ class GoogleTTS(Service):
         if options['profile'] != 'default':
             payload["audioConfig"]["effectsProfileId"] = [options['profile']]
 
-        r = requests.post("https://texttospeech.googleapis.com/v1/text:synthesize?key={}".format(options['key']), headers=headers, json=payload)
-        r.raise_for_status()
+        r = self.net_request('POST', "https://texttospeech.googleapis.com/v1/text:synthesize?key={}".format(options['key']), headers=headers, json=payload)
+        if r.status_code != 200:
+            raise IOError(f"Google Cloud synthesis failed (HTTP {r.status_code}).")
 
         data = r.json()
         encoded = data['audioContent']

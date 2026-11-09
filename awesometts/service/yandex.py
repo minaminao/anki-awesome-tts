@@ -134,7 +134,7 @@ class Yandex(Service):
         self.net_download(
             path,
             [
-                ('http://tts.voicetech.yandex.net/tts', dict(
+                ('https://tts.voicetech.yandex.net/tts', dict(
                     format='mp3',
                     quality=options['quality'],
                     lang=options['voice'],

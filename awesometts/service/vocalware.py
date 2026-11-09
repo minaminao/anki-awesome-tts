@@ -3,7 +3,6 @@ Service implementation for VocalWare TTS service
 """
 
 from .base import Service
-import requests
 import json
 import time
 import urllib
@@ -86,14 +85,13 @@ class VocalWare(Service):
         checksum = hashlib.md5(checksum_input.encode('utf-8')).hexdigest()
 
         url_parameters = f"""EID={voice_key['engine_id']}&LID={voice_key['language_id']}&VID={voice_key['voice_id']}&TXT={urlencoded_text}&ACC={account_id}&API={api_id}&CS={checksum}"""
-        url = f"""http://www.vocalware.com/tts/gen.php?{url_parameters}"""
+        url = f"""https://www.vocalware.com/tts/gen.php?{url_parameters}"""
 
-        response = requests.get(url)
+        response = self.net_request('GET', url)
         if response.status_code == 200:
             with open(path, 'wb') as audio:
                 audio.write(response.content)
         else:
-            error_message = f"Ran into error generating VocalWare voice, status code: {response.status_code}: {response.content}"
-            raise ValueError(error_message)
+            raise IOError(f"Vocalware synthesis failed (HTTP {response.status_code}).")
 
 

@@ -24,11 +24,7 @@ Service implementation for Baidu Speech API
 from .base import Service
 from .common import Trait
 from urllib.parse import quote_plus
-from urllib.parse import urlencode
-from urllib.request import Request
-from urllib.request import urlopen
 import datetime
-import json
 
 __all__ = ['Baidu']
 
@@ -147,10 +143,11 @@ class Baidu(Service):
             'client_secret': secret_key
         }
         
-        post_data = urlencode(params).encode('utf-8')
-        
-        req = Request('http://openapi.baidu.com/oauth/2.0/token', post_data)
-        result = json.loads(urlopen(req, timeout=5).read().decode())
+        response = self.net_request('POST', 'https://aip.baidubce.com/oauth/2.0/token',
+                                    data=params, timeout=5)
+        if response.status_code != 200:
+            raise IOError(f"Baidu authentication failed (HTTP {response.status_code}).")
+        result = response.json()
         
         if 'access_token' in result.keys() and 'scope' in result.keys():
             if not 'audio_tts_post' in result['scope'].split(' '):
@@ -182,9 +179,10 @@ class Baidu(Service):
             'ctp': 1
         }
         
-        post_data = urlencode(params).encode('utf-8')
-        req = Request('http://tsn.baidu.com/text2audio', post_data)
-        audio_content = urlopen(req).read()
+        response = self.net_request('POST', 'https://tsn.baidu.com/text2audio', data=params)
+        if response.status_code != 200:
+            raise IOError(f"Baidu synthesis failed (HTTP {response.status_code}).")
+        audio_content = response.content
         
         if options['encoding'] == 3:
             # Write MP3 audio content direct to file

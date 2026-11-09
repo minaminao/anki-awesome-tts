@@ -27,7 +27,6 @@ import hmac
 import json
 import time
 import uuid
-import requests
 import datetime
 
 
@@ -230,10 +229,9 @@ class Naver(Service):
             ]
         )        
         headers = _generate_headers()
-        self._logger.info(f'executing POST request on {url} with headers={headers}, data={params}')
-        response = requests.post(url, headers=headers, data=params)
+        response = self.net_request('POST', url, headers=headers, data=params)
         if response.status_code != 200:
-            raise Exception(f'got status_code {response.status_code} from {url}: {response.content} ')
+            raise IOError(f"Naver synthesis failed (HTTP {response.status_code}).")
 
         response_data = response.json()
         sound_id = response_data['id']
