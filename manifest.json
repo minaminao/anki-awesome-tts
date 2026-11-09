@@ -1,4 +1,5 @@
 {
-    "package": "awesometts",
-    "name": "AwesomeTTS"
+    "package": "minaminao_awesometts",
+    "name": "AwesomeTTS (minaminao fork)",
+    "homepage": "https://github.com/minaminao/anki-awesome-tts"
 }
