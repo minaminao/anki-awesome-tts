@@ -665,9 +665,6 @@ class Forvo(Service):
 
     def extras(self):
         """The Forvo API requires an API key."""
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []
 
         return [
             dict(key='key', label="API Key", required=True)
@@ -738,123 +735,92 @@ class Forvo(Service):
             )
         ]
 
-        if not self.languagetools.use_plus_mode():
-            result.append(dict(
-                key='apiurl',
-                label='API URL',
-                values=[URL_API_FREE, URL_API_COMMERCIAL, URL_API_CORPORATE],
-                default=URL_API_FREE,
-                transform=self.normalize_apiurl
-            ))        
+        result.append(dict(
+            key='apiurl',
+            label='API URL',
+            values=[URL_API_FREE, URL_API_COMMERCIAL, URL_API_CORPORATE],
+            default=URL_API_FREE,
+            transform=self.normalize_apiurl
+        ))
 
         return result
-
-    def get_language_code_from_forvo_lang(self, forvo_lang):
-        forvo_language_id_map = {
-            'zh': 'zh_cn',
-            'ind': 'id_',
-            'pt': 'pt_pt'
-        }
-        return forvo_language_id_map.get(forvo_lang, forvo_lang)
 
     def run(self, text, options, path):
         self._logger.debug(f'running Forvo on text=[{text}], options={options}')
 
-        if self.languagetools.use_plus_mode():
-            self._logger.info(f'using language tools API')
+        api_key = options['key']
+        if len(api_key) == 0:
+            raise IOError('API Key required for Forvo')
 
-            sex = options['sex']
-            country_code = options['country']
-            forvo_language_code = options['voice']
-            preferred_user = options['preferreduser']
+        if len(text) > 100:
+            raise IOError("Input text is too long for Forvo.")
 
-            service = 'Forvo'
-            voice_key = {
-                'language_code': forvo_language_code,
-                'country_code': country_code
-            }
-            if sex != 'any':
-                voice_key['gender'] = sex
-            if preferred_user != PREFERRED_USER_DEFAULT_KEY:
-                voice_key['preferred_user'] = preferred_user
+        encoded_text = urllib.parse.quote(text)
+        encoded_language = urllib.parse.quote(options['voice'])
+        sex = options['sex']
+        preferred_user = options['preferreduser']
 
-            languagetools_language_code = self.get_language_code_from_forvo_lang(forvo_language_code)
-            self.languagetools.generate_audio_v2(text, service, 'batch', languagetools_language_code, 'n/a', voice_key, {}, path)
-        else:
+        country_code = ''
+        if options['country'] != 'ANY':
+            # user selected a particular country
+            country_code = f"/country/{options['country']}"
 
-            api_key = options['key']
-            if len(api_key) == 0:
-                raise IOError('API Key required for Forvo')
+        username_param = ''
+        if preferred_user != PREFERRED_USER_DEFAULT_KEY:
+            username_param = f"/username/{preferred_user}"
 
-            if len(text) > 100:
-                raise IOError("Input text is too long for Forvo.")
+        sex_param = ''
+        if sex != 'any':
+            sex_param = f"/sex/{sex}"
 
-            encoded_text = urllib.parse.quote(text)
-            encoded_language = urllib.parse.quote(options['voice'])
-            sex = options['sex']
-            preferred_user = options['preferreduser']
+        url_base = 'apifree.forvo.com'
+        if options['apiurl'] == URL_API_COMMERCIAL[0]:
+            url_base = 'apicommercial.forvo.com'
 
-            country_code = ''
-            if options['country'] != 'ANY':
-                # user selected a particular country
-                country_code = f"/country/{options['country']}"
+        url = f'https://{url_base}/key/{api_key}/format/json/action/word-pronunciations/word/{encoded_text}/language/{encoded_language}{sex_param}{username_param}/order/rate-desc/limit/10{country_code}'
 
-            username_param = ''
-            if preferred_user != PREFERRED_USER_DEFAULT_KEY:
-                username_param = f"/username/{preferred_user}"
+        corporate_url = False
+        if options['apiurl'] == URL_API_CORPORATE[0]:
+            corporate_url = True
+            url = f'https://apicorporate.forvo.com/api2/v1.1/{api_key}/word-pronunciations/word/{encoded_text}/language/{encoded_language}{sex_param}/order/rate-desc/limit/1{country_code}'
 
-            sex_param = ''
-            if sex != 'any':
-                sex_param = f"/sex/{sex}"
+        self._logger.debug(f'constructed URL: {url}')
 
-            url_base = 'apifree.forvo.com'
-            if options['apiurl'] == URL_API_COMMERCIAL[0]:
-                url_base = 'apicommercial.forvo.com'
+        # run request
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:85.0) Gecko/20100101 Firefox/85.0'}
+        # forvo's http server / WAF / frontend setup is weird, so we have to disable SSL verification
+        response = requests.get(url, headers=headers, verify=False)
+        self._logger.debug(f'response.content: {response.content}')
 
-            url = f'https://{url_base}/key/{api_key}/format/json/action/word-pronunciations/word/{encoded_text}/language/{encoded_language}{sex_param}{username_param}/order/rate-desc/limit/10{country_code}'
-
-            corporate_url = False
-            if options['apiurl'] == URL_API_CORPORATE[0]:
-                corporate_url = True
-                url = f'https://apicorporate.forvo.com/api2/v1.1/{api_key}/word-pronunciations/word/{encoded_text}/language/{encoded_language}{sex_param}/order/rate-desc/limit/1{country_code}'
-
-            self._logger.debug(f'constructed URL: {url}')
-
-            # run request
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:85.0) Gecko/20100101 Firefox/85.0'}
-            # forvo's http server / WAF / frontend setup is weird, so we have to disable SSL verification
-            response = requests.get(url, headers=headers, verify=False)
-            self._logger.debug(f'response.content: {response.content}')
-
-            if response.status_code == 200:
-                # success
-                data = json.loads(response.content)
-                self._logger.debug(f'received data: {data}')
-                if corporate_url:
-                    items = data['data']['items']
-                else:
-                    items = data['items']
-                if len(items) == 0:
-                    message = f"Pronunciation not found in Forvo for word [{text}], language={options['voice']}, sex={sex}, country={options['country']}"
-                    raise IOError(message)
-                audio_url = items[0]['pathmp3']
-                for item in items:
-                    if item['word'] == text:
-                        audio_url = item['pathmp3']
-                        break
-
-                response = requests.get(audio_url, verify=False)
-                response.raise_for_status()
-
-                with open(path, 'wb') as audio:
-                    audio.write(response.content)
-
+        if response.status_code == 200:
+            # success
+            data = json.loads(response.content)
+            self._logger.debug(f'received data: {data}')
+            if corporate_url:
+                items = data['data']['items']
             else:
-                data = json.loads(response.content)
-                error_text = str(data)
-                if len(data) >= 1:
-                    error_text = data[0]
-                error_message = f"Status code: {response.status_code} error: {error_text} text: [{text}] voice: {options['voice']} gender: {sex}"
-                self._logger.error(error_message)
-                raise ValueError(error_message)
+                items = data['items']
+            if len(items) == 0:
+                message = f"Pronunciation not found in Forvo for word [{text}], language={options['voice']}, sex={sex}, country={options['country']}"
+                raise IOError(message)
+            audio_url = items[0]['pathmp3']
+            for item in items:
+                if item['word'] == text:
+                    audio_url = item['pathmp3']
+                    break
+
+            response = requests.get(audio_url, verify=False)
+            response.raise_for_status()
+
+            with open(path, 'wb') as audio:
+                audio.write(response.content)
+
+        else:
+            data = json.loads(response.content)
+            error_text = str(data)
+            if len(data) >= 1:
+                error_text = data[0]
+            error_message = f"Status code: {response.status_code} error: {error_text} text: [{text}] voice: {options['voice']} gender: {sex}"
+            self._logger.error(error_message)
+            raise ValueError(error_message)
         

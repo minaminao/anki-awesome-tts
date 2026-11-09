@@ -5,13 +5,11 @@ speech to their personal [Anki](https://apps.ankiweb.net) card decks.
 
 ![AwesomeTTS Screenshot](https://res.cloudinary.com/photozzap/image/upload/v1613176396/anki_graphics/AwesomeTTS_ankiweb_graphic_1.jpg)
 
-## Installing
+## このフォークの音声サービス
 
-* Install from AnkiWeb: https://ankiweb.net/shared/info/1436550454
-* or install from local file, by downloading the latest .ankiaddon file from releases https://github.com/Vocab-Apps/anki-awesome-tts/releases
+ローカル音声合成と、Azure や Google Cloud などへの直接接続に対応します。API キーが必要なサービスは、各サービスの設定欄にそのサービスのキーを入力します。
 
-## Tutorials
-To get started, please see https://www.vocab.ai/tutorials
+旧版の AwesomeTTS Plus、トライアル登録、Vocab.ai を経由する音声生成は削除しました。Amazon Polly は旧版ではこの経路でのみ提供されていたため、既存の Amazon プリセットを使うと利用不可のメッセージが表示されます。
 
 ## License
 

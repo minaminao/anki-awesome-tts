@@ -53,9 +53,6 @@ class FptAi(Service):
     def extras(self):
         """The FPT.AI API requires an API key."""
 
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []        
 
         return [dict(key='key', label="API Key", required=True)]
 
@@ -103,65 +100,54 @@ class FptAi(Service):
 
         speed = options['speed']
 
-        if self.languagetools.use_plus_mode():
-            self._logger.info(f'using language tools API')
-            service = 'FptAi'
-            voice_key = voice.get_voice_key()
-            language = voice.get_language_code()
-            options = {
-                'speed': speed
-            }
-            self.languagetools.generate_audio_v2(text, service, 'batch', language, 'n/a', voice_key, options, path)        
-        else:
+        # make request first, then we'll have a result URL
+        headers = {
+            'api_key': options['key'],
+            'voice': options['voice']['voice_id'],
+            'Cache-Control': 'no-cache',
+            'format': 'mp3',
+            'speed': str(options['speed'])
+        }
 
-            # make request first, then we'll have a result URL
-            headers = {
-                'api_key': options['key'],
-                'voice': options['voice']['voice_id'],
-                'Cache-Control': 'no-cache',
-                'format': 'mp3',
-                'speed': str(options['speed'])
-            }            
+        api_url = "https://api.fpt.ai/hmi/tts/v5"
+        body = text
+        response = requests.post(api_url, headers=headers, data=body.encode('utf-8'))
 
-            api_url = "https://api.fpt.ai/hmi/tts/v5"
-            body = text
-            response = requests.post(api_url, headers=headers, data=body.encode('utf-8'))
+        self._logger.debug(f'executing POST on {api_url} with headers {headers}, text: {text}')
 
-            self._logger.debug(f'executing POST on {api_url} with headers {headers}, text: {text}')
+        if response.status_code != 200:
+            error_message = f"Status code: {response.status_code} voice: {options['voice']} API key: {options['key']}"
+            self._logger.error(error_message)
+            raise ValueError(error_message)
 
-            if response.status_code != 200:
-                error_message = f"Status code: {response.status_code} voice: {options['voice']} API key: {options['key']}"
-                self._logger.error(error_message)
-                raise ValueError(error_message)
+        self._logger.debug(f'got response: {response.content}')
 
-            self._logger.debug(f'got response: {response.content}')
+        data = json.loads(response.content)
+        if data['error'] != 0:
+            error_message = f"error: {data['error']} message: {data['message']}"
+            self._logger.error(error_message)
+            raise ValueError(error_message)
 
-            data = json.loads(response.content)
-            if data['error'] != 0:
-                error_message = f"error: {data['error']} message: {data['message']}"
-                self._logger.error(error_message)
-                raise ValueError(error_message)
+        async_url = data['async']
 
-            async_url = data['async']
+        self._logger.debug(f"got async url: {async_url}")
 
-            self._logger.debug(f"got async url: {async_url}")
+        # wait until the audio is available
+        audio_available = False
+        max_tries = 7
+        wait_time = 0.2
+        while audio_available == False and max_tries > 0:
+            time.sleep(wait_time)
+            r = requests.get(async_url, allow_redirects=True)
+            self._logger.debug(f"status code: {r.status_code}")
+            if r.status_code == 200:
+                audio_available = True
+            wait_time = wait_time * 2
+            max_tries -= 1
 
-            # wait until the audio is available
-            audio_available = False
-            max_tries = 7
-            wait_time = 0.2
-            while audio_available == False and max_tries > 0:
-                time.sleep(wait_time)
-                r = requests.get(async_url, allow_redirects=True)
-                self._logger.debug(f"status code: {r.status_code}")
-                if r.status_code == 200:
-                    audio_available = True
-                wait_time = wait_time * 2
-                max_tries -= 1
-
-            self.net_download(
-                path,
-                async_url,
-                require=dict(mime='audio/mpeg', size=256),
-            )
+        self.net_download(
+            path,
+            async_url,
+            require=dict(mime='audio/mpeg', size=256),
+        )
 

@@ -103,9 +103,6 @@ class Azure(Service):
 
     def extras(self):
         """The Azure API requires an API key."""
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []
         return [dict(key='key', label="API Key", required=True)]
 
     def get_voices(self) -> List[AzureVoice]:
@@ -150,12 +147,11 @@ class Azure(Service):
             
         ]
 
-        if not self.languagetools.use_plus_mode():
-            result.append(dict(key='region',
-                 label='Region',
-                 values=REGIONS,
-                 default='eastus',
-                 transform=lambda value: value))
+        result.append(dict(key='region',
+             label='Region',
+             values=REGIONS,
+             default='eastus',
+             transform=lambda value: value))
             
         return result
 
@@ -195,52 +191,40 @@ class Azure(Service):
 
         sleep_time = self.config.get('service_azure_sleep_time', 0)
 
-        if self.languagetools.use_plus_mode():
-            self._logger.info(f'using language tools API')
-            service = 'Azure'
-            voice_key = voice.get_voice_key()
-            language = voice.get_language_code()
-            options = {
-                'pitch': pitch,
-                'rate': rate
-            }
-            self.languagetools.generate_audio_v2(text, service, 'batch', language, 'n/a', voice_key, options, path)
-        else:
+        region = options['region']
+        subscription_key = options['key']
+        if self.token_refresh_required():
+            self.get_token(subscription_key, region)
 
-            region = options['region']
-            subscription_key = options['key']
-            if self.token_refresh_required():
-                self.get_token(subscription_key, region)
+        voice_name = voice.get_key()
+        language = voice.get_language_code()
 
-            voice_name = voice.get_key()
-            language = voice.get_language_code()
+        base_url = f'https://{region}.tts.speech.microsoft.com/'
+        url_path = 'cognitiveservices/v1'
+        constructed_url = base_url + url_path
+        headers = {
+            'Authorization': 'Bearer ' + self.access_token,
+            'Content-Type': 'application/ssml+xml',
+            'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+            'User-Agent': 'anki-awesome-tts'
+        }
 
-            base_url = f'https://{region}.tts.speech.microsoft.com/'
-            url_path = 'cognitiveservices/v1'
-            constructed_url = base_url + url_path
-            headers = {
-                'Authorization': 'Bearer ' + self.access_token,
-                'Content-Type': 'application/ssml+xml',
-                'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
-                'User-Agent': 'anki-awesome-tts'
-            }
-
-            ssml_str = f"""<speak version="1.0" xmlns="https://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
+        ssml_str = f"""<speak version="1.0" xmlns="https://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
 <voice name="{voice_name}"><prosody rate="{rate:0.1f}" pitch="{pitch:+.0f}Hz" >{text}</prosody></voice>
 </speak>""".replace('\n', '')
-            
-            body = ssml_str.encode(encoding='utf-8')
 
-            response = requests.post(constructed_url, headers=headers, data=body)
-            if response.status_code == 200:
-                with open(path, 'wb') as audio:
-                    audio.write(response.content)
-            else:
-                error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}] language: [{language} " + \
-                f"subscription key: [{subscription_key}]] access token timestamp: [{self.access_token_timestamp}] access token: [{self.access_token}]"
-                raise ValueError(error_message)
+        body = ssml_str.encode(encoding='utf-8')
 
-            self._logger.debug(f'sleeping for {sleep_time} seconds')
-            time.sleep(sleep_time)
+        response = requests.post(constructed_url, headers=headers, data=body)
+        if response.status_code == 200:
+            with open(path, 'wb') as audio:
+                audio.write(response.content)
+        else:
+            error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}] language: [{language} " + \
+            f"subscription key: [{subscription_key}]] access token timestamp: [{self.access_token_timestamp}] access token: [{self.access_token}]"
+            raise ValueError(error_message)
+
+        self._logger.debug(f'sleeping for {sleep_time} seconds')
+        time.sleep(sleep_time)
 
 

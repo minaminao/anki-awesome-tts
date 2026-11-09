@@ -36,9 +36,6 @@ class ElevenLabs(Service):
         return f"{SERVICE_NAME} TTS service"
 
     def extras(self):
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []        
         return [
             dict(key='api_key', label="API Key", required=True)
         ]
@@ -87,42 +84,28 @@ class ElevenLabs(Service):
         voice_key = options['voice']
         voice = self.get_voice_for_key(voice_key)
 
-        if self.languagetools.use_plus_mode():
+        api_key = options['api_key']
 
-            self._logger.info(f'using language tools API')
-            service = SERVICE_NAME
-            voice_key = voice.get_voice_key()
-            language = voice.get_language_code()
-            options = {
+        voice_id = voice.voice_key['voice_id']
+        url = f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}'
+
+        headers = {
+            "Accept": "application/json",
+            "xi-api-key": api_key
+        }
+        headers['Accept'] = "audio/mpeg"
+
+        data = {
+            "text": text,
+            "model_id": voice.voice_key['model_id'],
+            "voice_settings": {
                 "stability": options.get('stability', self.DEFAULT_STABILITY),
                 "similarity_boost": options.get('similarity_boost', self.DEFAULT_SIMILARITY)
             }
-            self.languagetools.generate_audio_v2(text, service, 'batch', language, 'n/a', voice_key, options, path)
+        }
 
-        else:
+        response = requests.post(url, json=data, headers=headers)
+        response.raise_for_status()
 
-            api_key = options['api_key']
-
-            voice_id = voice.voice_key['voice_id']
-            url = f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}'
-
-            headers = {
-                "Accept": "application/json",
-                "xi-api-key": api_key
-            }
-            headers['Accept'] = "audio/mpeg"
-
-            data = {
-                "text": text,
-                "model_id": voice.voice_key['model_id'],
-                "voice_settings": {
-                    "stability": options.get('stability', self.DEFAULT_STABILITY),
-                    "similarity_boost": options.get('similarity_boost', self.DEFAULT_SIMILARITY)
-                }
-            }
-
-            response = requests.post(url, json=data, headers=headers)
-            response.raise_for_status()
-
-            with open(path, 'wb') as audio:
-                audio.write(response.content)
+        with open(path, 'wb') as audio:
+            audio.write(response.content)

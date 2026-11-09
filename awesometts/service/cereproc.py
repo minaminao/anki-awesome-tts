@@ -33,9 +33,6 @@ class CereProc(Service):
         return "CereProc TTS Service"
 
     def extras(self):
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []        
         return [dict(key='username', label="Username", required=True),
             dict(key='password', label="Password", required=True)
         ]
@@ -88,33 +85,22 @@ class CereProc(Service):
         voice_key = options['voice']
         voice = self.get_voice_for_key(voice_key)
 
-        if self.languagetools.use_plus_mode():
+        voice_name = voice.get_key()
 
-            self._logger.info(f'using language tools API')
-            service = 'CereProc'
-            voice_key = voice.get_voice_key()
-            language = voice.get_language_code()
-            options = {}
-            self.languagetools.generate_audio_v2(text, service, 'batch', language, 'n/a', voice_key, options, path)
+        username = options['username']
+        password = options['password']
 
+        ssml_text = f"""<?xml version="1.0" encoding="UTF-8"?>
+<speak xmlns="http://www.w3.org/2001/10/synthesis">{text}</speak>""".encode(encoding='utf-8')
+
+        url = f'https://api.cerevoice.com/v2/speak?voice={voice_name}&audio_format=mp3'
+        # logging.debug(f'querying url: {url}')
+        response = requests.post(url, data=ssml_text, headers=self.get_auth_headers(username, password))
+
+        if response.status_code == 200:
+            with open(path, 'wb') as audio:
+                audio.write(response.content)
         else:
-
-            voice_name = voice.get_key()
-
-            username = options['username']
-            password = options['password']
-
-            ssml_text = f"""<?xml version="1.0" encoding="UTF-8"?>
-    <speak xmlns="http://www.w3.org/2001/10/synthesis">{text}</speak>""".encode(encoding='utf-8')
-
-            url = f'https://api.cerevoice.com/v2/speak?voice={voice_name}&audio_format=mp3'
-            # logging.debug(f'querying url: {url}')            
-            response = requests.post(url, data=ssml_text, headers=self.get_auth_headers(username, password))
-
-            if response.status_code == 200:
-                with open(path, 'wb') as audio:
-                    audio.write(response.content)
-            else:
-                self._logger.error(response.content)
-                error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}]]]"
-                raise ValueError(error_message)
+            self._logger.error(response.content)
+            error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}]]]"
+            raise ValueError(error_message)

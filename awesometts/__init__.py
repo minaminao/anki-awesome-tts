@@ -24,7 +24,6 @@ from os.path import join
 import os
 import sys
 from time import time
-import uuid
 
 import anki
 import aqt
@@ -32,12 +31,11 @@ import aqt.qt
 
 from . import conversion as to, gui, paths, service
 from .bundle import Bundle
-from .config import Config, CONFIG_ADDON_NAME
+from .config import Config
 from .player import Player
 from .router import Router
 from .text import Sanitizer
 from .ttsplayer import register_tts_player
-from .languagetools import LanguageTools
 from .version import AWESOMETTS_VERSION
 
 __all__ = ['browser_menus', 'cards_button', 'config_menu', 'editor_button',
@@ -75,7 +73,7 @@ def get_platform_info():
 
 VERSION = AWESOMETTS_VERSION
 
-WEB = 'https://github.com/AwesomeTTS/awesometts-anki-addon'
+WEB = 'https://github.com/minaminao/anki-awesome-tts'
 
 AGENT = 'AwesomeTTS/%s (Anki %s; PyQt %s; %s)' % (VERSION, anki.version,
                                                   aqt.qt.PYQT_VERSION_STR,
@@ -106,14 +104,6 @@ if 'AWESOMETTS_DEBUG_LOGGING' in os.environ:
 else:
     logger = Bundle(debug=lambda *a, **k: None, error=lambda *a, **k: None,
                     info=lambda *a, **k: None, warn=lambda *a, **k: None)
-
-addon_config = aqt.mw.addonManager.getConfig(CONFIG_ADDON_NAME)
-user_uuid = addon_config.get('user_uuid', None)
-if user_uuid == None:
-    user_uuid = uuid.uuid4().hex
-    addon_config['user_uuid'] = user_uuid
-    aqt.mw.addonManager.writeConfig(CONFIG_ADDON_NAME, addon_config)
-
 
 config = Config(
     db=Bundle(path=paths.CONFIG,
@@ -147,7 +137,6 @@ config = Config(
         ('shortcut_launch_templater', 'text', 'Ctrl+T', str, str),
         ('otf_only_revealed_cloze', 'integer', False, to.lax_bool, int),
         ('otf_remove_hints', 'integer', False, to.lax_bool, int),
-        ('plus_api_key', 'text', '', str, str),
         ('presets', 'text', {}, to.deserialized_dict, to.compact_json),
         ('service_azure_sleep_time', 'integer', 0, int, int),
         ('service_forvo_preferred_users', 'text', '', str, str),
@@ -182,8 +171,6 @@ config = Config(
     ],
 )
 
-languagetools = LanguageTools(config['plus_api_key'], logger, VERSION, user_uuid)
-
 try:
     from aqt.sound import av_player
     from anki.sound import SoundOrVideoTag
@@ -210,7 +197,6 @@ player = Player(
 router = Router(
     services=Bundle(
         mappings=[
-            ('amazon', service.Amazon),
             ('azure', service.Azure),
             ('baidu', service.Baidu),
             ('cambridge', service.Cambridge),
@@ -243,6 +229,7 @@ router = Router(
             ('watson', service.Watson)
         ],
         dead=dict(
+            amazon="Amazon Polly is unavailable in this build. Please select another service.",
             ttsapicom="TTS-API.com has gone offline and can no longer be "
                       "used. Please switch to another service with English.",
         ),
@@ -262,7 +249,6 @@ router = Router(
                     normalize=to.normalized_ascii,
                     logger=logger,
                     ecosystem=Bundle(web=WEB, agent=AGENT),
-                    languagetools=languagetools,
                     config=config),
     ),
     cache_dir=paths.CACHE,
@@ -306,7 +292,6 @@ addon = Bundle(
         fail=bundlefail,
     ),
     language=service.languages.Language,
-    languagetools=languagetools,
     logger=logger,
     paths=Bundle(cache=paths.CACHE,
                  is_link=paths.ADDON_IS_LINKED),
@@ -576,33 +561,6 @@ def config_menu():
         sequence=aqt.qt.QKeySequence(config.get('shortcut_launch_configurator')),
         parent=aqt.mw.form.menuTools,
     )
-
-    # setup AwesomeTTS resources menu
-    resources_menu = aqt.qt.QMenu('AwesomeTTS Resources', aqt.mw)
-    
-    def open_url_lambda(url):
-        def open_url():
-            aqt.qt.QDesktopServices.openUrl(aqt.qt.QUrl(url))
-        return open_url
-
-    links = [
-        {'name': """What's New / Updates""", 'url_path': 'updates'},
-        {'name': 'Getting Started with AwesomeTTS', 'url_path': 'tutorials/awesometts-getting-started'},
-        {'name': 'Batch Audio Generation', 'url_path': 'tutorials/awesometts-batch-generation'},
-        {'name': 'On the fly Audio', 'url_path': 'tutorials/awesometts-on-the-fly-tts'},
-        {'name': 'All Tutorials', 'url_path': 'tutorials'},
-        {'name': 'Listen to Voice Samples', 'url_path': 'languages'},
-        {'name': 'Get Access to All Voices / All Services', 'url_path': 'awesometts-plus'},
-    ]    
-    for link in links:
-        action = aqt.qt.QAction(link['name'], aqt.mw)
-        url_path = link['url_path']
-        url = f'https://www.vocab.ai/{url_path}?utm_campaign=atts_resources&utm_source=awesometts&utm_medium=addon'
-        action.triggered.connect(open_url_lambda(url))
-        resources_menu.addAction(action)
-    # and add it to the tools menu
-    aqt.mw.form.menuTools.addMenu(resources_menu)
-
 
 def editor_button():
     """

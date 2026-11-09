@@ -54,7 +54,7 @@ class Configurator(Dialog):
         'strip_note_brackets', 'strip_note_parens', 'strip_template_braces',
         'strip_template_brackets', 'strip_template_parens', 'sub_note_cloze',
         'sub_template_cloze', 'sul_note', 'sul_template', 'throttle_sleep',
-        'throttle_threshold', 'plus_api_key', 'service_forvo_preferred_users',
+        'throttle_threshold', 'service_forvo_preferred_users',
         'service_azure_sleep_time',
         'strip_ruby_tags',
         'sub_note_xml_entities', 'sub_template_xml_entities'
@@ -487,7 +487,6 @@ class Configurator(Dialog):
         layout.addWidget(self._ui_tabs_advanced_presets())
         layout.addWidget(self._ui_tabs_advanced_cache())
         layout.addWidget(self._ui_tabs_advanced_other())
-        layout.addWidget(self._ui_tabs_advanced_plus())
         layout.addStretch()
 
         tab = aqt.qt.QWidget()
@@ -562,43 +561,6 @@ class Configurator(Dialog):
         group = aqt.qt.QGroupBox("Other")
         group.setLayout(ver)
         return group
-
-    def _ui_tabs_advanced_plus(self):
-
-        ver = aqt.qt.QVBoxLayout()
-        urlLink="<a href=\"https://www.vocab.ai/awesometts-plus?utm_campaign=atts_settings&utm_source=awesometts&utm_medium=addon\">1100+ High Quality TTS voices - free trial</a>" 
-        url_label = aqt.qt.QLabel(urlLink)
-        url_label.setOpenExternalLinks(True)
-        ver.addWidget(url_label)
-
-        plus_api_key = aqt.qt.QLineEdit()
-        plus_api_key.setObjectName('plus_api_key')
-        plus_api_key.setPlaceholderText("enter your API Key")
-
-        verify_button = aqt.qt.QPushButton()
-        verify_button.setObjectName('verify_plus_api_key')
-        verify_button.setText('Verify')
-        verify_button.clicked.connect(lambda: self._on_verify_plus_api_key(verify_button, plus_api_key))
-
-        account_info_button = aqt.qt.QPushButton()
-        account_info_button.setObjectName('plus_account_info')
-        account_info_button.setText('Account Info / Plan')
-        account_info_button.clicked.connect(lambda: self._on_plus_account_info(plus_api_key, self))
-        
-        hor = aqt.qt.QHBoxLayout()
-        hor.addWidget(plus_api_key)
-        hor.addWidget(verify_button)
-        hor.addWidget(account_info_button)
-        ver.addLayout(hor)
-
-        help_label = Label("Please restart Anki after entering API key. If you'd like to use free services, or "+
-        "use your own service API keys, remove the above API key and restart Anki.")
-        help_label.setWordWrap(True)
-        ver.addWidget(help_label)
-
-        group = aqt.qt.QGroupBox("AwesomeTTS Plus")
-        group.setLayout(ver)
-        return group        
 
     # Factories ##############################################################
 
@@ -694,11 +656,6 @@ class Configurator(Dialog):
             if widget.objectName() in self._PROPERTY_KEYS
         }
 
-        # don't overwrite api_key
-        if config_update_dict['plus_api_key'] == '' and self._addon.languagetools.trial_instant_signed_up:
-            # we just signed up for the instant trial, don't set the api key to empty string now
-            del config_update_dict['plus_api_key']
-
         self._logger.debug(f'updating config with: {pprint.pformat(config_update_dict, indent=4)}')
 
         self._addon.config.update(config_update_dict)
@@ -760,41 +717,3 @@ class Configurator(Dialog):
         button.setEnabled(False)
         self._addon.router.forget_failures()
         button.setText("forgot failures")
-
-    def _on_verify_plus_api_key(self, button, lineedit):
-        """Verify API key"""
-
-        button.setEnabled(False)
-        button.setText('Verifying..')
-        api_key = lineedit.text()
-        result = self._addon.languagetools.verify_api_key(api_key)
-        if result['key_valid'] == True:
-            button.setText('Key Valid')
-            # store api key in configuration
-            self._addon.config['plus_api_key'] = api_key
-            self._addon.languagetools.set_api_key(api_key)
-        else:
-            button.setEnabled(True)
-            button.setText('Verify')
-            aqt.utils.showCritical(result['msg'])
-
-    def _on_plus_account_info(self, lineedit, parent_dialog):
-        """Load account info"""
-
-        api_key = lineedit.text()
-        if len(api_key) == 0:
-            aqt.utils.showCritical('Please enter AwesomeTTS Plus API Key', parent=parent_dialog, title='AwesomeTTS Plus Account Info')
-            return
-        self._addon.languagetools.set_api_key(api_key)
-        data = self._addon.languagetools.account_info()
-        lines = []
-        for key, value in data.items():
-            html = f'<b>{key}</b>: {value}'
-            if key == 'update_url':
-                html = f"""<br/><a href='{value}'>Upgrade / Downgrade / Payment Info</a>"""
-            if key == 'cancel_url':
-                html = f"""<br/><a href='{value}'>Cancel Plan</a>"""
-            lines.append(html)
-        account_info_str = '<br/>'.join(lines)
-        aqt.utils.showInfo(account_info_str, parent=parent_dialog, title='AwesomeTTS Plus Account Info', textFormat='rich')
-

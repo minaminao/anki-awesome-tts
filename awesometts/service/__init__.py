@@ -22,7 +22,6 @@ Service classes for AwesomeTTS
 
 from .common import Trait
 
-from .amazon import Amazon
 from .azure import Azure
 from .baidu import Baidu
 from .cambridge import Cambridge
@@ -59,7 +58,6 @@ __all__ = [
     'Trait',
 
     # services
-    'Amazon',
     'Azure',
     'Baidu',
     'CereProc',

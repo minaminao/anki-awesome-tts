@@ -33,9 +33,6 @@ class VocalWare(Service):
     def extras(self):
         """The VocalWare API requires API identifiers"""
 
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []        
 
         return [
             dict(key='secretphrase', label="Secret Phrase", required=True),
@@ -77,35 +74,26 @@ class VocalWare(Service):
         voice_key = options['voice']
         voice = self.get_voice_for_key(voice_key)
 
-        if self.languagetools.use_plus_mode():
-            self._logger.info(f'using language tools API')
-            service = 'VocalWare'
-            voice_key = voice.get_voice_key()
-            language = voice.get_language_code()
-            options = {
-            }
-            self.languagetools.generate_audio_v2(text, service, 'batch', language, 'n/a', voice_key, options, path)        
+        secret_phrase = options['secretphrase']
+        account_id = options['accountid']
+        api_id = options['apiid']
+
+        urlencoded_text = urllib.parse.unquote_plus(text)
+
+        # checksum calculation
+        # CS = md5 (EID + LID + VID + TXT + EXT + FX_TYPE + FX_LEVEL + ACC + API+ SESSION + HTTP_ERR + SECRET PHRASE)
+        checksum_input = f"""{voice_key['engine_id']}{voice_key['language_id']}{voice_key['voice_id']}{text}{account_id}{api_id}{secret_phrase}"""
+        checksum = hashlib.md5(checksum_input.encode('utf-8')).hexdigest()
+
+        url_parameters = f"""EID={voice_key['engine_id']}&LID={voice_key['language_id']}&VID={voice_key['voice_id']}&TXT={urlencoded_text}&ACC={account_id}&API={api_id}&CS={checksum}"""
+        url = f"""http://www.vocalware.com/tts/gen.php?{url_parameters}"""
+
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(path, 'wb') as audio:
+                audio.write(response.content)
         else:
-            secret_phrase = options['secretphrase']
-            account_id = options['accountid']
-            api_id = options['apiid']
-
-            urlencoded_text = urllib.parse.unquote_plus(text)
-
-            # checksum calculation
-            # CS = md5 (EID + LID + VID + TXT + EXT + FX_TYPE + FX_LEVEL + ACC + API+ SESSION + HTTP_ERR + SECRET PHRASE)
-            checksum_input = f"""{voice_key['engine_id']}{voice_key['language_id']}{voice_key['voice_id']}{text}{account_id}{api_id}{secret_phrase}"""
-            checksum = hashlib.md5(checksum_input.encode('utf-8')).hexdigest()
-
-            url_parameters = f"""EID={voice_key['engine_id']}&LID={voice_key['language_id']}&VID={voice_key['voice_id']}&TXT={urlencoded_text}&ACC={account_id}&API={api_id}&CS={checksum}"""
-            url = f"""http://www.vocalware.com/tts/gen.php?{url_parameters}"""
-
-            response = requests.get(url)
-            if response.status_code == 200:
-                with open(path, 'wb') as audio:
-                    audio.write(response.content)
-            else:
-                error_message = f"Ran into error generating VocalWare voice, status code: {response.status_code}: {response.content}"
-                raise ValueError(error_message)
+            error_message = f"Ran into error generating VocalWare voice, status code: {response.status_code}: {response.content}"
+            raise ValueError(error_message)
 
 

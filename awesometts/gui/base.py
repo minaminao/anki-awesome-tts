@@ -132,9 +132,6 @@ class Dialog(aqt.qt.QDialog):
         layout.addStretch()
         layout.addWidget(self.version_label)
 
-        if self._addon.languagetools.use_plus_mode():
-            self.show_plus_mode()
-
         return layout
 
     def _ui_divider(self, orientation_style=aqt.qt.QFrame.Shape.VLine):
@@ -153,7 +150,7 @@ class Dialog(aqt.qt.QDialog):
     def _ui_buttons(self):
         """
         Returns a horizontal row of standard dialog buttons, with "OK"
-        and "Cancel", and "Help", which links to AwesomeTTS Tutorials
+        and "Cancel", and "Help", which opens the project documentation
         """
 
         buttons = aqt.qt.QDialogButtonBox()
@@ -188,15 +185,8 @@ class Dialog(aqt.qt.QDialog):
 
     # Auxiliary ##############################################################
 
-    def show_plus_mode(self):
-        # when the user has signed up for the plus mode trial
-        version_str = f'AwesomeTTS <span style="color:#FF0000; font-weight: bold;">Plus</span>' +\
-            f'<br/>v{self._addon.version}'
-        self.version_label.setText(version_str)
-        self.version_label.setTextFormat(aqt.qt.Qt.TextFormat.RichText)        
-
     def open_tutorials(self):
-        url = 'https://www.vocab.ai/tutorials?utm_campaign=atts_help&utm_source=awesometts&utm_medium=addon'
+        url = self._addon.web
         self._addon.logger.debug("Launching %s", url)
         aqt.qt.QDesktopServices.openUrl(aqt.qt.QUrl(url))
 
@@ -290,157 +280,9 @@ class ServiceDialog(Dialog):
         dropdown.activated.connect(self._on_service_activated)
         dropdown.currentIndexChanged.connect(self._on_preset_reset)
 
-        self.plus_mode_stack = aqt.qt.QStackedWidget()
-        night_mode = aqt.theme.theme_manager.night_mode
-        signup_button_stylesheet = 'background-color: #69F0AE;'
-        if night_mode:
-            signup_button_stylesheet = 'background-color: #69F0AE; color: #000000;'
-        font_large = aqt.qt.QFont()
-        font_large.setBold(True)            
-
-        # first layer: plus mode not activated
-        horizontal_layout = aqt.qt.QHBoxLayout()
-        plus_mode_url = 'https://www.vocab.ai/awesometts-plus?utm_campaign=atts_services&utm_source=awesometts&utm_medium=addon'
-        plus_mode_label = 'Get All Voices'
-        plus_mode_button = aqt.qt.QPushButton(plus_mode_label) 
-        plus_mode_button.setStyleSheet(signup_button_stylesheet)
-        plus_mode_button.setFont(font_large)
-        def activate_plus_mode_lambda():
-            def activate_plus():
-                # Create a dialog to ask for email and password
-                dialog = aqt.qt.QDialog(self)
-                dialog.setWindowTitle("Sign Up for AwesomeTTS Plus")
-                
-                layout = aqt.qt.QVBoxLayout()
-                
-                # Email field
-                email_label = aqt.qt.QLabel("Email:")
-                email_input = aqt.qt.QLineEdit()
-                email_input.setPlaceholderText("Enter your email")
-                
-                # Password field
-                password_label = aqt.qt.QLabel("Password:")
-                password_input = aqt.qt.QLineEdit()
-                password_input.setPlaceholderText("Create a password")
-                password_input.setEchoMode(aqt.qt.QLineEdit.EchoMode.Password)
-                
-                # Description
-                description = aqt.qt.QLabel("<i>Sign up to get access to 1200+ high quality TTS voices</i>")
-                description.setWordWrap(True)
-                
-                # Buttons
-                button_box = aqt.qt.QDialogButtonBox(
-                    aqt.qt.QDialogButtonBox.StandardButton.Ok | 
-                    aqt.qt.QDialogButtonBox.StandardButton.Cancel
-                )
-                ok_button = button_box.button(aqt.qt.QDialogButtonBox.StandardButton.Ok)
-                ok_button.setText("Sign Up")
-                ok_button.setStyleSheet(signup_button_stylesheet)
-                
-                # Add widgets to layout
-                layout.addWidget(description)
-                layout.addWidget(email_label)
-                layout.addWidget(email_input)
-                layout.addWidget(password_label)
-                layout.addWidget(password_input)
-                layout.addWidget(button_box)
-                
-                dialog.setLayout(layout)
-                
-                # Connect buttons
-                button_box.accepted.connect(dialog.accept)
-                button_box.rejected.connect(dialog.reject)
-                
-                # Show dialog
-                if dialog.exec() == aqt.qt.QDialog.DialogCode.Accepted:
-                    email = email_input.text().strip()
-                    password = password_input.text()
-                    
-                    # Try to request a trial key
-                    trial_signup_result = self._addon.languagetools.request_trial_key(email, password)
-                    
-                    if trial_signup_result.success:
-                        api_key = trial_signup_result.api_key
-                        # Save in the config
-                        self._addon.config['plus_api_key'] = api_key
-                        # Set it in memory in the languagetools object
-                        self._addon.languagetools.set_api_key(api_key)
-                        # This will show AwesomeTTS plus in the version label
-                        self.show_plus_mode()
-                        # Force currently selected service UI to reload
-                        self.clean_built_services()
-                        dropdown = self.findChild(aqt.qt.QComboBox, 'service')
-                        idx = dropdown.currentIndex()
-                        self._on_service_activated(idx, force_options_reload=True)
-                        # show signed up message
-                        self.plus_mode_stack.setCurrentIndex(3)                        
-                        # Show success message
-                        trial_confirmation_message = """<b>IMPORTANT</b>: You must confirm your email address before you can use the service. """\
-"""The email subject should be <b>Please Confirm Your Email Address</b> and sender: <b>Vocab.Ai</b>."""
-                        aqt.utils.showInfo(trial_confirmation_message, parent=self)
-                    else:
-                        # Show error message when success is False
-                        error_message = getattr(trial_signup_result, 'error', "Signup failed. Please try again.")
-                        aqt.utils.showWarning(error_message, parent=self)
-                
-            return activate_plus
-        plus_mode_button.pressed.connect(activate_plus_mode_lambda())
-
-        plus_mode_description=aqt.qt.QLabel()
-        font_small = aqt.qt.QFont()
-        font_small.setPointSize(8)
-        description_text = '<i>1200+ High quality TTS voices<br/> Signup for trial in one second, just enter your email.</i>'
-        plus_mode_description.setText(description_text)
-        plus_mode_description.setFont(font_small)
-        horizontal_layout.addWidget(plus_mode_button)
-        horizontal_layout.addWidget(plus_mode_description)
-        stack_widget = aqt.qt.QWidget()
-        stack_widget.setLayout(horizontal_layout) 
-        self.plus_mode_stack.addWidget(stack_widget)
-        
-        # second layer: user signining up
-        horizontal_layout = aqt.qt.QHBoxLayout()
-        email_text_input = aqt.qt.QLineEdit()
-        email_text_input.setPlaceholderText("enter your email")
-        horizontal_layout.addWidget(email_text_input)
-        signup_button = aqt.qt.QPushButton('Sign Up')
-        signup_button.setStyleSheet(signup_button_stylesheet)
-        signup_button.setFont(font_large)
-        horizontal_layout.addWidget(signup_button)
-        signup_status_label = aqt.qt.QLabel("<i>Enter email to get premium voices.</i>")
-        signup_status_label.setFont(font_small)
-        horizontal_layout.addWidget(signup_status_label)
-        stack_widget = aqt.qt.QWidget()
-        stack_widget.setLayout(horizontal_layout) 
-        self.plus_mode_stack.addWidget(stack_widget)
-
-        # third layer: empty (plus mode activated)
-        horizontal_layout = aqt.qt.QHBoxLayout()
-        stack_widget = aqt.qt.QWidget()
-        stack_widget.setLayout(horizontal_layout) 
-        self.plus_mode_stack.addWidget(stack_widget)       
-
-        # fourth layer: show that you are now signed up to plus mode
-        horizontal_layout = aqt.qt.QHBoxLayout()
-        signed_up_text = """<i>You now have access to all premium voices from Azure, Google, Amazon, Watson, Naver, Forvo.</i>"""
-        signed_up_label = aqt.qt.QLabel(signed_up_text)
-        signed_up_label.setWordWrap(True)
-        signed_up_label.setFont(font_small)
-        horizontal_layout.addWidget(signed_up_label)
-        stack_widget = aqt.qt.QWidget()
-        stack_widget.setLayout(horizontal_layout) 
-        self.plus_mode_stack.addWidget(stack_widget)         
-
-        if not self._addon.languagetools.use_plus_mode():
-            self.plus_mode_stack.setCurrentIndex(0)
-        else:
-            self.plus_mode_stack.setCurrentIndex(2)
-
-
         hor = aqt.qt.QHBoxLayout()
         hor.addWidget(Label("Generate using"))
         hor.addWidget(dropdown)
-        hor.addWidget(self.plus_mode_stack)
         hor.addStretch()
 
         header = Label("Configure Service")
@@ -566,26 +408,7 @@ class ServiceDialog(Dialog):
 
         super(ServiceDialog, self).show(*args, **kwargs)
 
-    def clean_built_services(self):
-        # clear the set of built panels
-        self._panel_built = {}
-        self._panel_set = {}
-        # actually empty out the widgets in the panels
-        stack = self.findChild(aqt.qt.QStackedWidget, 'panels')
-        for stack_id in range(stack.count()):
-            widget = stack.widget(stack_id)
-            widget_layout = widget.layout()
-
-            # print(f'*** clean_built_services num children: {widget_layout.count()}')
-            for i in reversed(range(1, widget_layout.count())): 
-                # print(f'processing child {i}')
-                widget = widget_layout.itemAt(i).widget()
-                if widget != None:
-                    widget.setParent(None)
-
-
-
-    def _on_service_activated(self, idx, initial=False, use_options=None, force_options_reload=False):
+    def _on_service_activated(self, idx, initial=False, use_options=None):
         """
         Construct the target widget if it has not already been built,
         recall the last-used values for the options, and then switch the
@@ -625,7 +448,7 @@ class ServiceDialog(Dialog):
 
         if panel_unbuilt or panel_unset or use_options:
             widget = stack.widget(idx)
-            options = self._addon.router.get_options(svc_id, force_options_reload=force_options_reload)
+            options = self._addon.router.get_options(svc_id)
 
             if panel_unbuilt:
                 self._panel_built[svc_id] = True

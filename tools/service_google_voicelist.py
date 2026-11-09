@@ -1,7 +1,6 @@
 import google.cloud.texttospeech
 
 # pip install google-cloud-texttospeech
-# export GOOGLE_APPLICATION_CREDENTIALS=/mnt/d/storage/dev/account_keys/cloudlanguagetools.json
 
 def language_code_to_enum(language_code):
     override_map = {

@@ -34,9 +34,6 @@ class Watson(Service):
         return "IBM Watson API"
 
     def extras(self):
-        if self.languagetools.use_plus_mode():
-            # plus mode, no need for an API key
-            return []        
         return [dict(key='key', label="API Key", required=True),
             dict(key='url', label="API URL", required=True)
         ]
@@ -79,47 +76,36 @@ class Watson(Service):
         voice_key = options['voice']
         voice = self.get_voice_for_key(voice_key)
 
-        if self.languagetools.use_plus_mode():
+        voice_name = voice.get_key()
 
-            self._logger.info(f'using language tools API')
-            service = 'Watson'
-            voice_key = voice.get_voice_key()
-            language = voice.get_language_code()
-            options = {}
-            self.languagetools.generate_audio_v2(text, service, 'batch', language, 'n/a', voice_key, options, path)
+        api_key = options['key']
+        api_url = options['url']
 
+
+
+        base_url = api_url
+        url_path = '/v1/synthesize'
+        constructed_url = base_url + url_path + f'?voice={voice_name}'
+        self._logger.info(f'url: {constructed_url}')
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mp3'
+        }
+
+        data = {
+            'text': text
+        }
+
+        self._logger.info(f'data: {data}')
+        response = requests.post(constructed_url, data=json.dumps(data), auth=('apikey', api_key), headers=headers)
+
+        if response.status_code == 200:
+            with open(path, 'wb') as audio:
+                audio.write(response.content)
         else:
-
-            voice_name = voice.get_key()
-
-            api_key = options['key']
-            api_url = options['url']
-
-
-
-            base_url = api_url
-            url_path = '/v1/synthesize'
-            constructed_url = base_url + url_path + f'?voice={voice_name}'
-            self._logger.info(f'url: {constructed_url}')
-            headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'audio/mp3'
-            }
-
-            data = {
-                'text': text
-            }
-
-            self._logger.info(f'data: {data}')
-            response = requests.post(constructed_url, data=json.dumps(data), auth=('apikey', api_key), headers=headers)
-
-            if response.status_code == 200:
-                with open(path, 'wb') as audio:
-                    audio.write(response.content)
-            else:
-                self._logger.error(response.content)
-                error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}] api key: [{api_key}]]"
-                raise ValueError(error_message)
+            self._logger.error(response.content)
+            error_message = f"Status code: {response.status_code} reason: {response.reason} voice: [{voice_name}] api key: [{api_key}]]"
+            raise ValueError(error_message)
 
 
 
